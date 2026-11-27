@@ -2,3 +2,6 @@
 !go.mod
 !go.sum
 !*.go
+!internal/bluetooth/*.go
+!internal/sensirion/*.go
+!internal/server/*.go

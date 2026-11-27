@@ -1,0 +1,16 @@
+#!/bin/bash
+set -eu
+
+cd "$(dirname "$0")/.."
+build=$(mktemp -d "${TMPDIR:-/tmp}/scd4x-exporter.XXXXXX")
+trap 'rm -f "$build/scanner" "$build/exporter"; rmdir "$build"' EXIT
+
+swiftc -o "$build/scanner" \
+    -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __info_plist -Xlinker internal/bluetooth/macos/Info.plist \
+    internal/bluetooth/macos/scanner.swift
+go build -o "$build/exporter" .
+
+"$build/exporter" -listen 127.0.0.1:9869 -mac-scanner "$build/scanner" "$@" &
+pid=$!
+trap 'kill -TERM "$pid" 2>/dev/null || true; wait "$pid"' INT TERM
+wait "$pid"

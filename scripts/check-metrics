@@ -1,0 +1,43 @@
+#!/bin/sh
+set -eu
+
+base=${1:-http://127.0.0.1:9869}
+base=${base%/}
+if ! status=$(curl -sS --max-time 5 -o /dev/null -w '%{http_code}' "$base/ready"); then
+    echo "Cannot reach the exporter at $base." >&2
+    exit 1
+fi
+if [ "$status" != 204 ]; then
+    echo "Exporter reachable, but Bluetooth scan is not ready (HTTP $status)." >&2
+    exit 1
+fi
+
+metrics=$(curl -fsS --max-time 5 "$base/metrics") || exit 1
+if [ -z "$metrics" ]; then
+    echo 'Bluetooth scan ready, but no recent MyCO2 readings.' >&2
+    exit 1
+fi
+
+if ! printf '%s\n' "$metrics" | awk '
+    $1 ~ /^scd4x_(co2_ppm|temperature_celsius|relative_humidity_percent|last_seen_timestamp_seconds)\{gadget="[0-9a-f][0-9a-f][0-9a-f][0-9a-f]"\}$/ &&
+    $2 ~ /^-?[0-9]+(\.[0-9]+)?$/ && NF == 2 {
+        split($1, label, "{")
+        key = label[2] SUBSEP label[1]
+        if (!seen[key]++) {
+            count[label[2]]++
+        }
+    }
+    END {
+        for (gadget in count) {
+            if (count[gadget] == 4) {
+                exit 0
+            }
+        }
+        exit 1
+    }
+'; then
+    echo 'Metrics endpoint responded, but no gadget has all four expected metrics.' >&2
+    exit 1
+fi
+
+printf 'Bluetooth scan ready; MyCO2 metrics are present:\n%s\n' "$metrics"
