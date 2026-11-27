@@ -12,7 +12,7 @@ backend. Discovery retries every 15 seconds if it fails.
 The backends in `internal/bluetooth` implement `bluetooth.Scanner` and deliver
 raw manufacturer data. `internal/sensirion` filters and decodes MyCO2
 advertisements into readings, which the exporter publishes as metrics.
-`server_command.go` configures the CLI; `internal/server` runs discovery and
+`main.go` configures the CLI; `internal/server` runs discovery and
 serves the HTTP endpoints.
 
 Docker images target Linux, including `linux/arm64` images built on an Apple
