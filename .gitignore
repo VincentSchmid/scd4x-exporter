@@ -1,0 +1,9 @@
+# Go build and test artifacts
+/scd4x-exporter
+/scd4x-exporter.exe
+*.test
+/coverage.out
+
+# Native macOS build artifacts and Finder metadata
+*.dSYM/
+.DS_Store

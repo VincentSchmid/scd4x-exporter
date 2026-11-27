@@ -4,6 +4,7 @@ on:
   pull_request:
   push:
     branches: [main]
+    tags: ['v[0-9]*']
 
 concurrency:
   group: ci-${{ github.event_name }}-${{ github.ref }}-${{ github.sha }}
@@ -28,7 +29,7 @@ jobs:
 
   image:
     needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref_type == 'tag')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -44,20 +45,33 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set image version
+        id: version
+        run: |
+          version="0.1.${GITHUB_RUN_NUMBER}"
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then
+            version="$GITHUB_REF_NAME"
+            if [[ ! "$version" =~ ^v[0-9][A-Za-z0-9_.-]{0,126}$ ]]; then
+              echo 'Release tag must be a valid Docker tag (for example, v0.2.0).' >&2
+              exit 1
+            fi
+          fi
+          printf 'tag=%s\n' "$version" >> "$GITHUB_OUTPUT"
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         id: build
         with:
           context: .
-          platforms: linux/arm64,linux/amd64
+          platforms: linux/arm64
           push: true
           tags: |
-            ghcr.io/vincentschmid/scd4x-exporter:0.1.${{ github.run_number }}
+            ghcr.io/vincentschmid/scd4x-exporter:${{ steps.version.outputs.tag }}
             ghcr.io/vincentschmid/scd4x-exporter:sha-${{ github.sha }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=0.1.${{ github.run_number }}
+            org.opencontainers.image.version=${{ steps.version.outputs.tag }}
       - name: Report image pin
         env:
           DIGEST: ${{ steps.build.outputs.digest }}
-        run: echo "\`ghcr.io/vincentschmid/scd4x-exporter:0.1.${GITHUB_RUN_NUMBER}@${DIGEST}\`" >> "$GITHUB_STEP_SUMMARY"
+          VERSION: ${{ steps.version.outputs.tag }}
+        run: printf '`ghcr.io/vincentschmid/scd4x-exporter:%s@%s`\n' "$VERSION" "$DIGEST" >> "$GITHUB_STEP_SUMMARY"
